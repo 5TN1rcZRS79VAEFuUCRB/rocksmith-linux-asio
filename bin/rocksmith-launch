@@ -1,0 +1,57 @@
+#!/bin/bash
+# Steam launch wrapper for Rocksmith 2014 + RS_ASIO + WineASIO on PipeWire.
+# Steam launch options:   ~/.local/bin/rocksmith-launch %command%
+#
+# Steam's %command% looks roughly like:
+#   steam-launch-wrapper -- reaper ... -- <SteamLinuxRuntime>/_v2-entry-point --verb=... -- <proton> waitforexitandrun <exe> ...
+# WineASIO can't reach JACK/PipeWire inside the Steam Linux Runtime container, so the
+# entry point (and its args up to its "--") is dropped and Proton runs directly on the host.
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/rocksmith-linux-asio/config"
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/rocksmith-launch.log"
+# shellcheck source=/dev/null
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+args=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        *_v2-entry-point)
+            while [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done
+            shift ;;
+        *)
+            args+=("$1"); shift ;;
+    esac
+done
+
+export PIPEWIRE_LATENCY="${PIPEWIRE_LATENCY:-256/48000}"
+# wineasio defaults to 16 in / 16 out; RS_ASIO only uses one input and a stereo output
+export WINEASIO_NUMBER_INPUTS=1 WINEASIO_NUMBER_OUTPUTS=2
+# wineasio's autoconnect grabs the *first* physical capture port (often a webcam mic),
+# so it's turned off and the ports chosen in setup are linked below instead.
+export WINEASIO_CONNECT_TO_HARDWARE=off
+[ -n "$EXTRA_DLL_OVERRIDES" ] && export WINEDLLOVERRIDES="$EXTRA_DLL_OVERRIDES${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+
+: >"$LOG"
+(
+    unset LD_PRELOAD   # Steam's overlay preload only spams errors into these tools
+    if [ -n "$INPUT_VOLUME" ] && [ -n "$INPUT_NODE" ] && command -v pactl >/dev/null; then
+        pactl set-source-volume "$INPUT_NODE" "$INPUT_VOLUME" && echo "input volume: $INPUT_VOLUME"
+    fi
+    for _ in $(seq 1200); do   # wait up to 2 minutes for wineasio's ports
+        if pw-link -i | grep -qx 'Rocksmith2014:in_1'; then
+            [ -n "$INPUT_PORT" ]    && pw-link "$INPUT_PORT" Rocksmith2014:in_1
+            [ -n "$OUTPUT_PORT_L" ] && pw-link Rocksmith2014:out_1 "$OUTPUT_PORT_L"
+            [ -n "$OUTPUT_PORT_R" ] && pw-link Rocksmith2014:out_2 "$OUTPUT_PORT_R"
+            echo "linked: $INPUT_PORT -> in_1, out_1 -> $OUTPUT_PORT_L, out_2 -> $OUTPUT_PORT_R"
+            exit
+        fi
+        sleep 0.1
+    done
+    echo "gave up: Rocksmith2014:in_1 never appeared (is RS_ASIO/WineASIO set up?)"
+) >>"$LOG" 2>&1 &
+
+if [ "$REFOCUS" = 1 ]; then
+    (unset LD_PRELOAD; exec "$(dirname "$(readlink -f "$0")")/rocksmith-refocus") >>"$LOG" 2>&1 &
+fi
+
+exec "${args[@]}"

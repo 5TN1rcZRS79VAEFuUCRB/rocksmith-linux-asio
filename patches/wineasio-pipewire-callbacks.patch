@@ -1,0 +1,34 @@
+--- a/asio.c
++++ b/asio.c
+@@ -1249,8 +1249,8 @@
+     if(This->host_driver_state != Running)
+         return 0;
+ 
+-    if (This->host_callbacks->sendNotification(1, 3, 0, 0))
+-        This->host_callbacks->sendNotification(3, 0, 0, 0);
++    /* rocksmith: pipewire-jack runs this on a non-Wine thread (wineasio#137, pipewire#3542); calling into the host there segfaults */
++    (void)This;
+     return 0;
+ }
+ 
+@@ -1261,9 +1261,8 @@
+     if(This->host_driver_state != Running)
+         return;
+ 
+-    if (This->host_callbacks->sendNotification(1, 6, 0, 0))
+-        This->host_callbacks->sendNotification(6, 0, 0, 0);
+-
++    /* rocksmith: pipewire-jack runs this on a non-Wine thread (wineasio#137, pipewire#3542); calling into the host there segfaults */
++    (void)This;
+     return;
+ }
+ 
+@@ -1343,7 +1342,7 @@
+         return 0;
+ 
+     This->host_sample_rate = nframes;
+-    This->host_callbacks->sampleRateChanged(nframes);
++    /* rocksmith: pipewire-jack runs this on a non-Wine thread (wineasio#137, pipewire#3542); calling into the host there segfaults */
+     return 0;
+ }
+ 
