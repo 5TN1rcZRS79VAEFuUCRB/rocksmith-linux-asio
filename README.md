@@ -123,5 +123,5 @@ Not affiliated with Ubisoft. Rocksmith is a trademark of Ubisoft Entertainment.
 
 ## License
 
-Scripts: MIT (see [LICENSE](LICENSE)). The WineASIO patch is a derivative of WineASIO and is
+Scripts: GPL-3.0-or-later (see [LICENSE](LICENSE)). The WineASIO patch is a derivative of WineASIO and is
 under WineASIO's license (LGPL-2.1-or-later).
